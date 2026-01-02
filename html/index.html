@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modora Report System</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- NUI Modal with Iframe -->
+    <div id="reportModal" class="modal hidden">
+        <div class="modal-backdrop" onclick="closeModal()"></div>
+        <div class="modal-container">
+            <div class="modal-content">
+                <!-- Header -->
+                <div class="modal-header">
+                    <div class="header-content">
+                        <div class="header-icon">
+                            📋
+                        </div>
+                        <div class="header-text">
+                            <h2>Create Report</h2>
+                            <p class="header-subtitle">Submit a detailed report to our support team</p>
+                        </div>
+                    </div>
+                    <button class="close-btn" onclick="closeModal()" aria-label="Close">
+                        ✕
+                    </button>
+                </div>
+                
+                <!-- Iframe Container -->
+                <div class="modal-body">
+                    <iframe id="reportIframe" src="" frameborder="0" allowfullscreen></iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
