@@ -24,18 +24,19 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
     
-      - name: Extract release notes from CHANGELOG
+      - name: Extract release notes and create body
         id: get_changelog
         run: |
-          # Extract the changelog entry for this version
           VERSION="${{ steps.get_version.outputs.version }}"
+          REPO="${{ github.repository }}"
           
-          # Use Python to extract the changelog section more reliably
+          # Use Python to extract the changelog section and create full release body
           python3 << 'PYTHON_SCRIPT'
           import re
-          import sys
+          import os
           
-          version = "${{ steps.get_version.outputs.version }}"
+          version = os.environ['VERSION']
+          repo = os.environ['REPO']
           
           try:
               with open('CHANGELOG.md', 'r', encoding='utf-8') as f:
@@ -52,45 +53,59 @@ jobs:
               else:
                   release_notes = f"Release {version}"
               
-              # Write to output
-              with open('release_notes.txt', 'w', encoding='utf-8') as f:
-                  f.write(release_notes)
+              # Create full release body
+              release_body = f"""{release_notes}
+
+## 📥 Installation
+
+1. Download the latest release from the Assets section below
+2. Extract the zip file
+3. Replace your existing `modora-reports` folder with the new version
+4. Restart the resource: `restart modora-reports`
+
+## 🔗 Links
+
+- [Full Changelog](https://github.com/{repo}/blob/main/CHANGELOG.md)
+- [Documentation](https://github.com/{repo}/blob/main/README.md)
+"""
+              
+              # Write to file
+              with open('release_body.txt', 'w', encoding='utf-8') as f:
+                  f.write(release_body)
               
               print(f"Release notes extracted for version {version}")
           except Exception as e:
               print(f"Error: {e}")
-              with open('release_notes.txt', 'w', encoding='utf-8') as f:
-                  f.write(f"Release {version}")
+              # Fallback release body
+              fallback_body = f"""Release {version}
+
+## 📥 Installation
+
+1. Download the latest release from the Assets section below
+2. Extract the zip file
+3. Replace your existing `modora-reports` folder with the new version
+4. Restart the resource: `restart modora-reports`
+
+## 🔗 Links
+
+- [Full Changelog](https://github.com/{repo}/blob/main/CHANGELOG.md)
+- [Documentation](https://github.com/{repo}/blob/main/README.md)
+"""
+              with open('release_body.txt', 'w', encoding='utf-8') as f:
+                  f.write(fallback_body)
           PYTHON_SCRIPT
-          
-          # Read and output release notes
-          {
-            echo 'release_notes<<EOF'
-            cat release_notes.txt
-            echo EOF
-          } >> $GITHUB_OUTPUT
     
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           name: Release v${{ steps.get_version.outputs.version }}
-          body: |
-            ${{ steps.get_changelog.outputs.release_notes }}
-            
-            ## 📥 Installation
-            
-            1. Download the latest release from the Assets section below
-            2. Extract the zip file
-            3. Replace your existing `modora-reports` folder with the new version
-            4. Restart the resource: `restart modora-reports`
-            
-            ## 🔗 Links
-            
-            - [Full Changelog](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)
-            - [Documentation](https://github.com/${{ github.repository }}/blob/main/README.md)
+          body_path: release_body.txt
           draft: false
           prerelease: false
-          generate_release_notes: true
+          files: |
+            *.lua
+            *.md
+            html/**
+            LICENSE
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
