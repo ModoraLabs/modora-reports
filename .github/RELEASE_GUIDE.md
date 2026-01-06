@@ -79,3 +79,4 @@ The automatic release workflow includes:
 - **`.github/workflows/release.yml`** - Automatic release on tag push
 - **`.github/workflows/release-manual.yml`** - Manual trigger via GitHub Actions UI
 
+
