@@ -117,24 +117,37 @@ function openModal() {
     // Store iframe reference for later use
     iframeReference = iframe;
     
-    // Set iframe source
-    iframe.src = reportFormUrl;
-    
+    // Make sure modal is visible first
     modal.classList.remove('hidden');
     isModalOpen = true;
     
-    // Send player data to iframe after it loads
-    iframe.onload = function() {
-        console.log('[Modora] Iframe loaded successfully');
-        // Small delay to ensure iframe contentWindow is fully ready
-        setTimeout(() => {
-            sendPlayerDataToIframe();
-        }, 100);
-    };
+    // Force reflow to ensure modal is visible before loading iframe
+    void modal.offsetHeight;
     
-    iframe.onerror = function() {
-        console.error('[Modora] Error loading iframe:', reportFormUrl);
-    };
+    // Clear previous iframe src if any, then set new one
+    iframe.src = '';
+    
+    // Small delay to ensure modal is fully rendered before loading iframe
+    setTimeout(() => {
+        console.log('[Modora] Setting iframe src to:', reportFormUrl);
+        iframe.src = reportFormUrl;
+        
+        // Send player data to iframe after it loads
+        iframe.onload = function() {
+            console.log('[Modora] Iframe loaded successfully');
+            // Small delay to ensure iframe contentWindow is fully ready
+            setTimeout(() => {
+                sendPlayerDataToIframe();
+            }, 200);
+        };
+        
+        iframe.onerror = function() {
+            console.error('[Modora] Error loading iframe:', reportFormUrl);
+            // Show error message to user
+            const errorMsg = 'Failed to load report form. Please check your internet connection and try again.';
+            alert(errorMsg);
+        };
+    }, 100);
 }
 
 function closeModal() {
