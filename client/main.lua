@@ -280,15 +280,3 @@ Citizen.CreateThread(function()
         end
     end
 end)
-
--- ============================================
--- MODERATION: warn notification
--- ============================================
-RegisterNetEvent('modora:moderation:warn', function(message)
-    if message and message ~= '' then
-        TriggerEvent('chat:addMessage', {
-            color = { 255, 165, 0 },
-            args = { '[Modora]', 'Warning: ' .. tostring(message) }
-        })
-    end
-end)

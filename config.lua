@@ -28,25 +28,6 @@ Config.NearbyRadius = 30.0 -- Radius in meters for nearby players detection
 Config.MaxNearbyPlayers = 5 -- Maximum number of nearby players to show
 
 -- ============================================
--- MODERATION BRIDGE (optional)
--- ============================================
--- Same API token as reports. Enable moderation (command queue, bans, whitelist) when set.
-Config.ModerationEnabled = true -- Set to false to disable moderation bridge
-Config.PollIntervalSeconds = tonumber((GetConvar and GetConvar('modora_moderation_poll_interval', '10')) or '10') or 10
-Config.WhitelistOnly = (type(GetConvarInt) == 'function' and GetConvarInt('modora_moderation_whitelist_only', 0) == 1) or false
-Config.ConnectPolicy = (GetConvar and GetConvar('modora_moderation_connect_policy', 'fail_closed')) or 'fail_closed'
-
--- TXAdmin sync (optional): merge bans/whitelist from TXAdmin with Modora data.
--- Set to your TXAdmin base URL (e.g. same as your server + TXAdmin port, often 40120).
--- Leave empty to use only Modora dashboard data.
-Config.TXAdminBaseUrl = '' -- e.g. 'http://127.0.0.1:40120'
-Config.TXAdminToken = ''   -- Optional. Many TXAdmin versions do not use an API token for local requests.
-                           -- If your TXAdmin API requires auth: check txAdmin Web Panel → Settings → Advanced
-                           -- or the txAdmin documentation (https://github.com/tabarra/txAdmin) for "API" / "Token".
-Config.TXAdminBansPath = '/api/bans'       -- Path for bans list (adjust if your TXAdmin version uses another path)
-Config.TXAdminWhitelistPath = '/api/whitelist' -- Path for whitelist (optional)
-
--- ============================================
 -- DEBUG & LOCALE
 -- ============================================
 Config.Debug = false -- Set to true for detailed logging
