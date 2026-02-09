@@ -1,6 +1,6 @@
 # Modora FiveM Integration Resource
 
-Version: 1.0.3
+Version: 1.0.4
 Author: ModoraLabs
 
 ## Overview
@@ -25,7 +25,7 @@ Config.ReportCommand = 'report'
 Config.ReportKeybind = 'F7'
 Config.NearbyRadius = 30.0
 Config.MaxNearbyPlayers = 5
-Config.Locale = 'nl'
+Config.Locale = 'en'
 Config.Debug = false
 ```
 
