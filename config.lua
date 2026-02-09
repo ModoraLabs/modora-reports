@@ -16,6 +16,18 @@ Config.ModoraHostHeader = 'api.modora.xyz'
 Config.APIToken = 'your_api_key'
 
 -- ============================================
+-- ALPHA ENVIRONMENT (optional, for testing)
+-- ============================================
+-- Zet op true om de alpha-omgeving te gebruiken (alpha.modora.xyz / alpha IP).
+-- Handig als je IP-based test terwijl productie op modora.xyz staat.
+-- Convar: set modora_use_alpha 1
+Config.UseAlphaEnvironment = (type(GetConvarInt) == 'function' and GetConvarInt('modora_use_alpha', 0) == 1) or false
+-- Alpha API base (bijv. IP van alpha-server of http://api.alpha.modora.xyz)
+Config.ModoraAPIBaseAlpha = 'http://157.180.103.21'  -- vervang door alpha IP of hostname
+Config.ModoraHostHeaderAlpha = 'api.alpha.modora.xyz' -- bij IP-based: Host header voor alpha
+Config.APITokenAlpha = ''  -- API token van de FiveM server in het alpha-dashboard
+
+-- ============================================
 -- REPORT COMMAND & KEYBIND
 -- ============================================
 Config.ReportCommand = 'report'

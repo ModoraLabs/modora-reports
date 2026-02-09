@@ -55,12 +55,27 @@ end)
 -- API AUTHENTICATION
 -- ============================================
 
--- Build authentication headers
+-- Returns effective base URL, host header and token (prod or alpha).
+local function getEffectiveAPIConfig()
+    local useAlpha = (Config.UseAlphaEnvironment == true) and
+        (Config.ModoraAPIBaseAlpha or '') ~= '' and
+        (Config.APITokenAlpha or '') ~= ''
+    if useAlpha then
+        local base = (Config.ModoraAPIBaseAlpha or ''):gsub('/+$', ''):match('^%s*(.-)%s*$')
+        local host = (Config.ModoraHostHeaderAlpha or ''):match('^%s*(.-)%s*$')
+        local token = (Config.APITokenAlpha or ''):match('^%s*(.-)%s*$')
+        return base, host, token, true
+    end
+    local base = (Config.ModoraAPIBase or ''):gsub('/+$', ''):match('^%s*(.-)%s*$')
+    local host = (Config.ModoraHostHeader or ''):match('^%s*(.-)%s*$')
+    local token = (Config.APIToken or ''):match('^%s*(.-)%s*$')
+    return base, host, token, false
+end
+
+-- Build authentication headers (uses effective config: prod or alpha)
 local function buildAuthHeaders()
-    local token = Config.APIToken or ''
-    -- Trim whitespace from token
-    token = token:match('^%s*(.-)%s*$')
-    
+    local _, hostHeader, token = getEffectiveAPIConfig()
+    token = token or ''
     local headers = {
         ['Content-Type'] = 'application/json',
         ['Authorization'] = 'Bearer ' .. token,
@@ -70,8 +85,6 @@ local function buildAuthHeaders()
         ['Accept-Encoding'] = 'identity', -- Disable compression for FiveM compatibility
         ['HTTP-Version'] = '1.1' -- Explicitly request HTTP/1.1 (informational header)
     }
-
-    local hostHeader = Config.ModoraHostHeader
     if hostHeader and hostHeader ~= '' then
         headers['Host'] = hostHeader
     end
@@ -155,39 +168,31 @@ end
 
 -- Get server configuration from API
 local function getServerConfig(callback)
-    if not Config.ModoraAPIBase or Config.ModoraAPIBase == '' then
+    local baseUrl, _, token, isAlpha = getEffectiveAPIConfig()
+    if not baseUrl or baseUrl == '' then
         if callback then callback(false, 'API base URL not configured') end
         return
     end
-    
-    if not Config.APIToken or Config.APIToken == '' then
+    if not token or token == '' then
         if callback then callback(false, 'API token not configured') end
         return
     end
-    
-    -- Ensure URL doesn't have trailing slash and is properly formatted
-    local baseUrl = Config.ModoraAPIBase:gsub('/+$', '')
-    -- Remove any whitespace
-    baseUrl = baseUrl:match('^%s*(.-)%s*$')
-    
-    -- Validate URL format (allow both http:// and https://)
     if not baseUrl:match('^https?://') then
         if callback then callback(false, 'API base URL must start with http:// or https://') end
         return
     end
-    
-    -- Warn if using HTTP (less secure)
     if baseUrl:match('^http://') and Config.Debug then
         print('[Modora] ⚠️ WARNING: Using HTTP (not HTTPS). This is less secure but avoids SSL/TLS certificate issues.')
     end
-    
+    if isAlpha and Config.Debug then
+        print('[Modora] Using ALPHA environment: ' .. baseUrl)
+    end
     local url = baseUrl .. '/config'
     local headers = buildAuthHeaders()
-    
     if Config.Debug then
         print('[Modora] Fetching server config from: ' .. url)
-        print('[Modora] API Token length: ' .. tostring(string.len(Config.APIToken or '')))
-        print('[Modora] API Token preview: ' .. string.sub(Config.APIToken or '', 1, 10) .. '...')
+        print('[Modora] API Token length: ' .. tostring(string.len(token or '')))
+        print('[Modora] API Token preview: ' .. string.sub(token or '', 1, 10) .. '...')
     end
     
     performHttpRequestWithRetry(url, 'GET', '', headers, function(statusCode, response, responseHeaders, maxRetries, retryCount)
@@ -236,20 +241,16 @@ end
 
 -- Submit report to API
 local function submitReport(reportData, callback)
-    if not Config.ModoraAPIBase or Config.ModoraAPIBase == '' then
+    local baseUrl, _, token = getEffectiveAPIConfig()
+    if not baseUrl or baseUrl == '' then
         if callback then callback(false, nil, 'API base URL not configured') end
         return
     end
-    
-    if not Config.APIToken or Config.APIToken == '' then
+    if not token or token == '' then
         if callback then callback(false, nil, 'API token not configured') end
         return
     end
-    
-    -- Ensure URL doesn't have trailing slash and is properly formatted
-    local baseUrl = Config.ModoraAPIBase:gsub('/+$', '')
-    -- Remove any whitespace
-    baseUrl = baseUrl:match('^%s*(.-)%s*$')
+    baseUrl = baseUrl:gsub('/+$', ''):match('^%s*(.-)%s*$')
     
     -- Validate URL format (allow both http:// and https://)
     if not baseUrl:match('^https?://') then
@@ -428,8 +429,9 @@ end)
 RegisterNetEvent('modora:getScreenshotUploadUrl')
 AddEventHandler('modora:getScreenshotUploadUrl', function()
     local source = source
-    local baseUrl = (Config.ModoraAPIBase or ''):gsub('/+$', ''):match('^%s*(.-)%s*$')
-    if baseUrl == '' or (Config.APIToken or '') == '' then
+    local baseUrl, _, token = getEffectiveAPIConfig()
+    baseUrl = (baseUrl or ''):gsub('/+$', ''):match('^%s*(.-)%s*$')
+    if baseUrl == '' or (token or '') == '' then
         TriggerClientEvent('modora:screenshotUploadUrl', source, '')
         return
     end
@@ -455,13 +457,11 @@ end)
 -- ============================================
 
 local function testAPIConnection()
-    if not Config.ModoraAPIBase or Config.ModoraAPIBase == '' then
+    local baseUrl, hostHeader = getEffectiveAPIConfig()
+    if not baseUrl or baseUrl == '' then
         return
     end
-    
-    local baseUrl = Config.ModoraAPIBase:gsub('/+$', '')
-    baseUrl = baseUrl:match('^%s*(.-)%s*$')
-    
+    baseUrl = baseUrl:gsub('/+$', ''):match('^%s*(.-)%s*$')
     if not baseUrl:match('^https?://') then
         print('^1[Modora] ⚠️ Invalid API base URL format. Must start with http:// or https://^7')
         return
@@ -490,7 +490,6 @@ local function testAPIConnection()
         ['Connection'] = 'close',
         ['Accept-Encoding'] = 'identity'
     }
-    local hostHeader = Config.ModoraHostHeader
     if hostHeader and hostHeader ~= '' then
         testHeaders['Host'] = hostHeader
     end
@@ -629,17 +628,18 @@ end, false)
 Citizen.CreateThread(function()
     Citizen.Wait(2000) -- Wait 2 seconds after resource start
     
+    local baseUrl, _, token = getEffectiveAPIConfig()
     local configValid = true
     local errors = {}
     
-    if not Config.ModoraAPIBase or Config.ModoraAPIBase == '' then
+    if not baseUrl or baseUrl == '' then
         configValid = false
-        table.insert(errors, 'ModoraAPIBase is not set')
+        table.insert(errors, Config.UseAlphaEnvironment and 'ModoraAPIBaseAlpha is not set' or 'ModoraAPIBase is not set')
     end
     
-    if not Config.APIToken or Config.APIToken == '' then
+    if not token or token == '' then
         configValid = false
-        table.insert(errors, 'APIToken is required')
+        table.insert(errors, Config.UseAlphaEnvironment and 'APITokenAlpha is required for alpha' or 'APIToken is required')
     end
     
     if not configValid then

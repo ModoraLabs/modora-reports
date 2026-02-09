@@ -53,6 +53,20 @@ restart modora-admin
 
 **API base:** Use only `https://api.modora.xyz` (or `http://api.modora.xyz`) or the server IP + `ModoraHostHeader = 'api.modora.xyz'`.
 
+### Alpha environment (IP-based testing)
+
+To test against the alpha dashboard (alpha.modora.xyz) with IP-based access:
+
+```lua
+Config.UseAlphaEnvironment = true
+Config.ModoraAPIBaseAlpha = 'http://ALPHA_SERVER_IP'   -- IP of the alpha deployment
+Config.ModoraHostHeaderAlpha = 'api.alpha.modora.xyz'  -- Host header for alpha (when using IP)
+Config.APITokenAlpha = 'alpha_server_api_token'       -- API token from the FiveM server in the alpha dashboard
+```
+
+Or via convar: `set modora_use_alpha 1` (and set the Alpha config values in config.lua).  
+On the **alpha** Laravel deployment, set `FIVEM_API_IP_HOSTS` to the alpha server IP so the API routes match when the request Host is that IP.
+
 ## NUI (report form)
 
 - **Lua → NUI:** `openReport` with optional `INIT` (serverName, cooldownRemaining, playerName, version); `reportSubmitted` (success, ticketNumber, ticketId, ticketUrl, error, cooldownSeconds).
