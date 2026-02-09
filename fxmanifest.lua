@@ -3,7 +3,7 @@ game 'gta5'
 
 author 'ModoraLabs'
 description 'Modora FiveM Integration - Report system that creates Discord tickets'
-version '1.0.0'
+version '1.0.3'
 
 dependency 'screenshot-basic'
 

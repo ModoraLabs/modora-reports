@@ -26,10 +26,10 @@ jobs:
     
       - name: Extract release notes and create body
         id: get_changelog
+        env:
+          VERSION: ${{ steps.get_version.outputs.version }}
+          REPO: ${{ github.repository }}
         run: |
-          VERSION="${{ steps.get_version.outputs.version }}"
-          REPO="${{ github.repository }}"
-          
           # Use Python to extract the changelog section and create full release body
           python3 << 'PYTHON_SCRIPT'
           import re
