@@ -1,6 +1,6 @@
 # Modora FiveM Admin
 
-Version: 1.0.5  
+Version: 1.0.6
 Author: ModoraLabs
 
 FiveM resource: **Reports** — in-game report form → Discord ticket.
@@ -22,7 +22,7 @@ FiveM resource: **Reports** — in-game report form → Discord ticket.
 ## Configuration
 
 ```lua
-Config.ModoraAPIBase = 'http://api.modora.xyz'
+Config.ModoraAPIBase = 'http://api.modoralabs.com'
 Config.APIToken = 'your_api_token_here'
 Config.ReportCommand = 'report'
 Config.ReportKeybind = 'F7'
@@ -35,14 +35,14 @@ Config.Debug = false
 Optional convars in `server.cfg`:
 
 ```cfg
-set modora_api_base "http://api.modora.xyz"
+set modora_api_base "http://api.modoralabs.com"
 set modora_api_token "your_token"
 ```
 
 When using the server IP as base (e.g. `http://157.180.103.21`), set the Host header:
 
 ```lua
-Config.ModoraHostHeader = 'api.modora.xyz'
+Config.ModoraHostHeader = 'api.modoralabs.com'
 ```
 
 Restart after config changes:
@@ -51,7 +51,8 @@ Restart after config changes:
 restart modora-admin
 ```
 
-**API base:** Use only `https://api.modora.xyz` (or `http://api.modora.xyz`) or the server IP + `ModoraHostHeader = 'api.modora.xyz'`.
+**API base:** Use only `https://api.modoralabs.com` (or `http://api.modoralabs.com`) or the server IP + `ModoraHostHeader = 'api.modoralabs.com'`.  
+*(We use `api.modoralabs.com` because FiveM blocks requests to `.xyz` domains.)*
 
 ### Alpha environment (IP-based testing)
 
@@ -60,7 +61,7 @@ To test against the alpha dashboard (alpha.modora.xyz) with IP-based access:
 ```lua
 Config.UseAlphaEnvironment = true
 Config.ModoraAPIBaseAlpha = 'http://ALPHA_SERVER_IP'   -- IP of the alpha deployment
-Config.ModoraHostHeaderAlpha = 'api.alpha.modora.xyz'  -- Host header for alpha (when using IP)
+Config.ModoraHostHeaderAlpha = 'api.alpha.modoralabs.com'  -- Host header for alpha (when using IP)
 Config.APITokenAlpha = 'alpha_server_api_token'       -- API token from the FiveM server in the alpha dashboard
 ```
 

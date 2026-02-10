@@ -3,37 +3,20 @@ Config = {}
 -- ============================================
 -- API CONFIGURATION (REQUIRED)
 -- ============================================
--- FiveM API gebruikt alleen de api.modora.xyz- of IP-route (geen path-based URL).
--- Geen trailing slash. Voorbeelden:
---   https://api.modora.xyz   of   http://api.modora.xyz
---   Of direct IP (bijv. als HTTP geblokkeerd wordt):  http://JOUW_IP  en zet ModoraHostHeader hieronder.
-Config.ModoraAPIBase = 'http://api.modora.xyz'
+-- API base URL (no trailing slash). Use hostname or IP; when using IP, set ModoraHostHeader.
+Config.ModoraAPIBase = 'http://api.modoralabs.com'
 
--- Verplicht wanneer je een IP als base gebruikt (zodat de server de juiste host ziet).
--- IMPORTANT: Leave EMPTY when using hostname directly (like api.modora.xyz)
--- Only set this when using IP address as base URL
+-- Host header when using an IP as base URL. Leave empty when using hostname.
 Config.ModoraHostHeader = ''
 
--- API Token from Modora Dashboard.
+-- API token from the Modora dashboard (FiveM → your server → API).
 Config.APIToken = 'your_api_key'
-
--- ============================================
--- ALPHA ENVIRONMENT (optional, for testing)
--- ============================================
--- Zet op true om de alpha-omgeving te gebruiken (alpha.modora.xyz / alpha IP).
--- Handig als je IP-based test terwijl productie op modora.xyz staat.
--- Convar: set modora_use_alpha 1
-Config.UseAlphaEnvironment = (type(GetConvarInt) == 'function' and GetConvarInt('modora_use_alpha', 0) == 1) or false
--- Alpha API base (bijv. IP van alpha-server of http://api.alpha.modora.xyz)
-Config.ModoraAPIBaseAlpha = 'http://alpha-api.modora.xyz'  -- Use hostname for alpha
-Config.ModoraHostHeaderAlpha = '' -- Leave empty when using hostname
-Config.APITokenAlpha = ''  -- API token van de FiveM server in het alpha-dashboard
 
 -- ============================================
 -- REPORT COMMAND & KEYBIND
 -- ============================================
 Config.ReportCommand = 'report'
-Config.ReportKeybind = 'F7' -- Or false to disable
+Config.ReportKeybind = 'disable' -- Or F7 as example
 
 -- ============================================
 -- NEARBY PLAYERS SETTINGS
@@ -42,10 +25,10 @@ Config.NearbyRadius = 30.0 -- Radius in meters for nearby players detection
 Config.MaxNearbyPlayers = 5 -- Maximum number of nearby players to show
 
 -- ============================================
--- DEBUG & LOCALE
+-- LOCALE & LOGGING
 -- ============================================
-Config.Debug = false -- Set to true for detailed logging
-Config.Locale = 'en' -- 'nl' or 'en'
+Config.Debug = false
+Config.Locale = 'en'  -- 'nl' or 'en'
 
 Config.Messages = {
     ['nl'] = {

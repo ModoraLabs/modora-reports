@@ -8,75 +8,38 @@
 </head>
 <body>
     <div id="app" class="modora-app hidden">
-        <div class="modora-modal-backdrop" data-action="close" aria-label="Close"></div>
+        <div class="modora-backdrop" data-action="close" aria-label="Close"></div>
         <div class="modora-card" role="dialog" aria-labelledby="report-title" aria-modal="true">
             <div class="modora-card-header">
-                <button type="button" class="modora-close-btn" id="btnClose" aria-label="Close">×</button>
-                <h1 id="report-title" class="modora-label" style="font-size: var(--modora-text-lg); margin-bottom: 4px;">Report</h1>
-                <p id="report-subtitle" class="modora-helper" style="margin: 0;">Submit a report to staff</p>
-                <p id="serverName" class="modora-helper" style="margin-top: 8px; margin-bottom: 0;"></p>
+                <button type="button" class="modora-close" id="btnClose" aria-label="Close">×</button>
+                <div class="modora-card-title">
+                    <div class="modora-icon" aria-hidden="true">📋</div>
+                    <h1 id="report-title">Report</h1>
+                </div>
+                <p id="report-subtitle" class="modora-card-subtitle">Submit a report to staff</p>
+                <p id="serverName" class="modora-card-subtitle" style="margin-top: 6px;"></p>
             </div>
             <div class="modora-card-body">
-                <!-- State: loading -->
-                <div id="stateLoading" class="modora-loading-block">
+                <div id="stateLoading" class="modora-loading">
                     <div class="modora-spinner"></div>
                     <p>Loading...</p>
                 </div>
-                <!-- State: form -->
                 <div id="stateForm" class="hidden">
-                    <p id="reportIntroText" class="modora-helper hidden" style="margin-bottom: 12px;"></p>
+                    <p id="reportIntroText" class="modora-card-subtitle hidden" style="margin-bottom: 16px;"></p>
                     <div id="formError" class="modora-toast modora-toast-error hidden" role="alert"></div>
                     <div id="cooldownNotice" class="modora-toast modora-toast-error hidden" role="status"></div>
                     <form id="reportForm" novalidate>
-                        <div class="modora-form-section">
-                            <label class="modora-label" for="category">Category *</label>
-                            <select id="category" class="modora-select modora-input" required aria-required="true">
-                                <option value="">Select category...</option>
-                                <option value="scam">Scam</option>
-                                <option value="harassment">Harassment</option>
-                                <option value="exploit">Exploit</option>
-                                <option value="cheating">Cheating</option>
-                                <option value="other">Other</option>
-                            </select>
-                            <span id="categoryError" class="modora-error hidden" role="alert"></span>
-                        </div>
-                        <div class="modora-form-section">
-                            <label class="modora-label" for="subject">Title *</label>
-                            <input type="text" id="subject" class="modora-input" placeholder="Short summary (max 80 characters)" maxlength="80" required aria-required="true">
-                            <span id="subjectError" class="modora-error hidden" role="alert"></span>
-                            <span class="modora-char-count"><span id="subjectCount">0</span>/80</span>
-                        </div>
-                        <div class="modora-form-section">
-                            <label class="modora-label" for="description">Description *</label>
-                            <textarea id="description" class="modora-textarea" placeholder="Describe what happened (min 20, max 2000 characters)..." minlength="20" maxlength="2000" rows="5" required aria-required="true"></textarea>
-                            <span id="descriptionError" class="modora-error hidden" role="alert"></span>
-                            <span class="modora-char-count"><span id="descriptionCount">0</span>/2000</span>
-                        </div>
-                        <div class="modora-form-section">
-                            <label class="modora-label">Evidence (optional)</label>
-                            <div class="modora-helper">Add links or take an in-game screenshot</div>
-                            <div id="evidenceList" class="modora-evidence-list"></div>
-                            <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
-                                <button type="button" id="btnAddEvidence" class="modora-btn modora-btn-ghost">+ Add URL</button>
-                                <button type="button" id="btnTakeScreenshot" class="modora-btn modora-btn-ghost">📷 Take screenshot</button>
-                            </div>
-                        </div>
-                        <div id="nearbySection" class="modora-form-section hidden">
-                            <label class="modora-label">Reported player(s) (optional)</label>
-                            <div id="nearbyPlayers" class="modora-nearby-box"></div>
-                        </div>
+                        <div id="formContent"></div>
                         <div class="modora-form-actions">
                             <button type="button" id="btnCancel" class="modora-btn modora-btn-ghost">Cancel</button>
-                            <button type="submit" id="btnSubmit" class="modora-btn modora-btn-primary">Submit Report</button>
+                            <button type="submit" id="btnSubmit" class="modora-btn modora-btn-primary">Submit report</button>
                         </div>
                     </form>
                 </div>
-                <!-- State: success -->
-                <div id="stateSuccess" class="modora-success-block hidden">
+                <div id="stateSuccess" class="modora-success hidden">
                     <div class="modora-success-icon" aria-hidden="true">✓</div>
-                    <h2 style="font-size: var(--modora-text-lg); margin: 0;">Report sent</h2>
-                    <p id="successMessage" style="color: var(--modora-text-muted); margin: 0;"></p>
-                    <a id="ticketLink" class="modora-btn modora-btn-primary hidden" href="#" target="_blank" rel="noopener">View ticket</a>
+                    <h2>Report sent</h2>
+                    <p id="successMessage"></p>
                     <button type="button" id="btnCloseSuccess" class="modora-btn modora-btn-primary">Close</button>
                 </div>
             </div>

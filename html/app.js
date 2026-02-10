@@ -11,8 +11,8 @@
     }
 
     var state = {
-        view: 'closed', // closed | loading | form | submitting | success | error
-        init: null,     // { serverName, cooldownRemaining, playerName, theme, version }
+        view: 'closed',
+        init: null,
         playerData: null,
         serverConfig: null,
         form: {
@@ -20,10 +20,12 @@
             subject: '',
             description: '',
             evidenceUrls: [],
-            targets: []
+            targets: [],
+            customFields: {},
+            screenshotUrl: null
         },
         cooldownRemaining: 0,
-        lastSuccess: null  // { ticketId, ticketNumber, ticketUrl }
+        lastSuccess: null
     };
 
     var DEFAULT_CATEGORIES = [
@@ -107,35 +109,348 @@
         });
     }
 
-    function renderCategories() {
+    function getCategories() {
         var rfc = state.serverConfig && state.serverConfig.reportFormConfig;
-        var categories = (rfc && rfc.categories && rfc.categories.length) ? rfc.categories.map(function(c) {
-            return { id: c.id, label: c.label || c.id };
-        }) : (state.serverConfig && state.serverConfig.categories) || DEFAULT_CATEGORIES;
-        var select = document.getElementById('category');
-        if (!select) return;
-        var first = select.querySelector('option');
-        select.innerHTML = first ? first.outerHTML : '<option value="">Select category...</option>';
-        categories.forEach(function(cat) {
-            var id = typeof cat === 'object' ? (cat.id || cat.value) : cat;
-            var label = typeof cat === 'object' ? (cat.label || cat.name || id) : id;
-            var opt = document.createElement('option');
-            opt.value = id;
-            opt.textContent = label;
-            select.appendChild(opt);
+        if (rfc && rfc.categories && rfc.categories.length) {
+            return rfc.categories.map(function(c) {
+                return { id: c.id, label: c.label || c.id, fields: c.fields || [] };
+            });
+        }
+        var cats = (state.serverConfig && state.serverConfig.categories) || DEFAULT_CATEGORIES;
+        return cats.map(function(c) {
+            var id = typeof c === 'object' ? (c.id || c.value) : c;
+            var label = typeof c === 'object' ? (c.label || c.name || id) : id;
+            return { id: id, label: label, fields: [] };
         });
     }
 
-    function renderIntroText() {
+    function getSelectedCategoryData() {
+        var catId = state.form.category;
+        if (!catId) return null;
+        var cats = getCategories();
+        for (var i = 0; i < cats.length; i++) {
+            if (cats[i].id === catId) return cats[i];
+        }
+        return null;
+    }
+
+    function sortFields(fields) {
+        if (!fields || !fields.length) return [];
+        return fields.slice().sort(function(a, b) {
+            var oa = a.order != null ? a.order : 999;
+            var ob = b.order != null ? b.order : 999;
+            return oa - ob;
+        });
+    }
+
+    function renderFormContent() {
+        var container = document.getElementById('formContent');
+        if (!container) return;
+
+        var categories = getCategories();
         var rfc = state.serverConfig && state.serverConfig.reportFormConfig;
-        var intro = (rfc && rfc.introText) ? String(rfc.introText).trim() : '';
-        var el = document.getElementById('reportIntroText');
-        if (!el) return;
-        if (intro) {
-            el.textContent = intro;
-            el.classList.remove('hidden');
-        } else {
-            el.classList.add('hidden');
+        var selectedCat = getSelectedCategoryData();
+        var fields = selectedCat ? sortFields(selectedCat.fields) : [];
+
+        container.innerHTML = '';
+
+        // Category
+        var sectionCat = document.createElement('div');
+        sectionCat.className = 'modora-form-section';
+        var labelCat = document.createElement('label');
+        labelCat.className = 'modora-label';
+        labelCat.setAttribute('for', 'category');
+        labelCat.textContent = 'Category';
+        var selectCat = document.createElement('select');
+        selectCat.id = 'category';
+        selectCat.className = 'modora-select';
+        selectCat.innerHTML = '<option value="">Select category...</option>';
+        categories.forEach(function(c) {
+            var opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.label;
+            if (c.id === state.form.category) opt.selected = true;
+            selectCat.appendChild(opt);
+        });
+        selectCat.addEventListener('change', function() {
+            state.form.category = this.value;
+            state.form.customFields = {};
+            renderFormContent();
+            renderNearbyPlayers();
+        });
+        var errCat = document.createElement('div');
+        errCat.id = 'categoryError';
+        errCat.className = 'modora-error hidden';
+        sectionCat.appendChild(labelCat);
+        sectionCat.appendChild(selectCat);
+        sectionCat.appendChild(errCat);
+        container.appendChild(sectionCat);
+
+        // Dynamic fields from reportFormConfig
+        if (fields.length) {
+            var wrapFields = document.createElement('div');
+            wrapFields.className = 'modora-dynamic-fields';
+            fields.forEach(function(field) {
+                var section = document.createElement('div');
+                section.className = 'modora-form-section';
+                section.setAttribute('data-field-id', field.id);
+
+                var label = document.createElement('label');
+                label.className = 'modora-label';
+                label.textContent = field.label || field.id;
+                if (field.required) label.textContent += ' *';
+                section.appendChild(label);
+
+                var type = (field.type || 'text').toLowerCase();
+                var value = state.form.customFields[field.id];
+
+                if (type === 'text') {
+                    var input = document.createElement('input');
+                    input.type = 'text';
+                    input.className = 'modora-input';
+                    input.placeholder = field.placeholder || '';
+                    input.value = value != null ? value : '';
+                    input.setAttribute('data-field-id', field.id);
+                    input.addEventListener('input', function() {
+                        state.form.customFields[field.id] = this.value;
+                    });
+                    section.appendChild(input);
+                } else if (type === 'textarea') {
+                    var ta = document.createElement('textarea');
+                    ta.className = 'modora-textarea';
+                    ta.placeholder = field.placeholder || '';
+                    ta.value = value != null ? value : '';
+                    ta.setAttribute('data-field-id', field.id);
+                    ta.addEventListener('input', function() {
+                        state.form.customFields[field.id] = this.value;
+                    });
+                    section.appendChild(ta);
+                } else if (type === 'select') {
+                    var sel = document.createElement('select');
+                    sel.className = 'modora-select';
+                    sel.setAttribute('data-field-id', field.id);
+                    var opts = field.options || [];
+                    sel.innerHTML = '<option value="">Select...</option>';
+                    opts.forEach(function(o) {
+                        var opt = document.createElement('option');
+                        opt.value = o;
+                        opt.textContent = o;
+                        if (o === value) opt.selected = true;
+                        sel.appendChild(opt);
+                    });
+                    sel.addEventListener('change', function() {
+                        state.form.customFields[field.id] = this.value;
+                    });
+                    section.appendChild(sel);
+                } else if (type === 'number') {
+                    var num = document.createElement('input');
+                    num.type = 'number';
+                    num.className = 'modora-input';
+                    num.placeholder = field.placeholder || '';
+                    num.value = value != null ? value : '';
+                    num.setAttribute('data-field-id', field.id);
+                    num.addEventListener('input', function() {
+                        state.form.customFields[field.id] = this.value;
+                    });
+                    section.appendChild(num);
+                } else if (type === 'screenshot') {
+                    var screenshotWrap = document.createElement('div');
+                    var screenshotBtn = document.createElement('button');
+                    screenshotBtn.type = 'button';
+                    screenshotBtn.className = 'modora-btn modora-btn-primary';
+                    screenshotBtn.textContent = '📷 Take screenshot';
+                    screenshotBtn.setAttribute('data-field-id', field.id);
+                    var screenshotValue = state.form.customFields[field.id] || state.form.screenshotUrl;
+                    if (screenshotValue) {
+                        var preview = document.createElement('div');
+                        preview.className = 'modora-screenshot-preview';
+                        preview.textContent = 'Screenshot added';
+                        screenshotWrap.appendChild(preview);
+                    }
+                    screenshotWrap.appendChild(screenshotBtn);
+                    screenshotBtn.addEventListener('click', function() {
+                        var btn = this;
+                        btn.disabled = true;
+                        btn.textContent = 'Taking screenshot...';
+                        sendNuiCallback('requestScreenshotUpload', {}).then(function(data) {
+                            btn.disabled = false;
+                            btn.textContent = '📷 Take screenshot';
+                            if (data && data.success && data.url) {
+                                state.form.customFields[field.id] = data.url;
+                                state.form.screenshotUrl = data.url;
+                                state.form.evidenceUrls.push(data.url);
+                                renderFormContent();
+                                renderEvidenceUrls();
+                            } else if (data && data.error) {
+                                showFormError(data.error);
+                            }
+                        }).catch(function() {
+                            btn.disabled = false;
+                            btn.textContent = '📷 Take screenshot';
+                        });
+                    });
+                    section.appendChild(screenshotWrap);
+                } else if (type === 'file-upload') {
+                    var fileNote = document.createElement('p');
+                    fileNote.className = 'modora-card-subtitle';
+                    fileNote.style.marginTop = '4px';
+                    fileNote.textContent = 'You can add evidence URLs below.';
+                    section.appendChild(fileNote);
+                }
+
+                var errField = document.createElement('div');
+                errField.className = 'modora-error hidden';
+                errField.setAttribute('data-field-error', field.id);
+                section.appendChild(errField);
+                wrapFields.appendChild(section);
+            });
+            container.appendChild(wrapFields);
+        }
+
+        // Subject (title)
+        var sectionSub = document.createElement('div');
+        sectionSub.className = 'modora-form-section';
+        var labelSub = document.createElement('label');
+        labelSub.className = 'modora-label';
+        labelSub.setAttribute('for', 'subject');
+        labelSub.textContent = 'Title';
+        var inputSub = document.createElement('input');
+        inputSub.type = 'text';
+        inputSub.id = 'subject';
+        inputSub.className = 'modora-input';
+        inputSub.placeholder = 'Short title';
+        inputSub.maxLength = 80;
+        inputSub.value = state.form.subject || '';
+        inputSub.addEventListener('input', function() {
+            state.form.subject = this.value;
+            var count = document.getElementById('subjectCount');
+            if (count) count.textContent = this.value.length;
+        });
+        var subCount = document.createElement('div');
+        subCount.id = 'subjectCount';
+        subCount.className = 'modora-char-count';
+        subCount.textContent = (state.form.subject || '').length;
+        var errSub = document.createElement('div');
+        errSub.id = 'subjectError';
+        errSub.className = 'modora-error hidden';
+        sectionSub.appendChild(labelSub);
+        sectionSub.appendChild(inputSub);
+        sectionSub.appendChild(subCount);
+        sectionSub.appendChild(errSub);
+        container.appendChild(sectionSub);
+
+        // Description
+        var sectionDesc = document.createElement('div');
+        sectionDesc.className = 'modora-form-section';
+        var labelDesc = document.createElement('label');
+        labelDesc.className = 'modora-label';
+        labelDesc.setAttribute('for', 'description');
+        labelDesc.textContent = 'Description';
+        var taDesc = document.createElement('textarea');
+        taDesc.id = 'description';
+        taDesc.className = 'modora-textarea';
+        taDesc.placeholder = 'Describe what happened (min 20 characters)';
+        taDesc.value = state.form.description || '';
+        taDesc.addEventListener('input', function() {
+            state.form.description = this.value;
+            var count = document.getElementById('descriptionCount');
+            if (count) count.textContent = this.value.length;
+        });
+        var descCount = document.createElement('div');
+        descCount.id = 'descriptionCount';
+        descCount.className = 'modora-char-count';
+        descCount.textContent = (state.form.description || '').length;
+        var errDesc = document.createElement('div');
+        errDesc.id = 'descriptionError';
+        errDesc.className = 'modora-error hidden';
+        sectionDesc.appendChild(labelDesc);
+        sectionDesc.appendChild(taDesc);
+        sectionDesc.appendChild(descCount);
+        sectionDesc.appendChild(errDesc);
+        container.appendChild(sectionDesc);
+
+        // Evidence URLs
+        var sectionEv = document.createElement('div');
+        sectionEv.className = 'modora-form-section';
+        var labelEv = document.createElement('label');
+        labelEv.className = 'modora-label';
+        labelEv.textContent = 'Evidence (URLs)';
+        sectionEv.appendChild(labelEv);
+        var evidenceList = document.createElement('div');
+        evidenceList.id = 'evidenceList';
+        evidenceList.className = 'modora-evidence-list';
+        sectionEv.appendChild(evidenceList);
+        var btnAddEv = document.createElement('button');
+        btnAddEv.type = 'button';
+        btnAddEv.id = 'btnAddEvidence';
+        btnAddEv.className = 'modora-btn modora-btn-ghost';
+        btnAddEv.textContent = '+ Add URL';
+        btnAddEv.addEventListener('click', addEvidenceUrl);
+        sectionEv.appendChild(btnAddEv);
+        container.appendChild(sectionEv);
+
+        // Screenshot (if not already in dynamic fields)
+        var hasScreenshotField = fields.some(function(f) { return (f.type || '').toLowerCase() === 'screenshot'; });
+        if (!hasScreenshotField && rfc !== false) {
+            var sectionSc = document.createElement('div');
+            sectionSc.className = 'modora-form-section';
+            var labelSc = document.createElement('label');
+            labelSc.className = 'modora-label';
+            labelSc.textContent = 'Screenshot';
+            sectionSc.appendChild(labelSc);
+            var screenshotBtn = document.createElement('button');
+            screenshotBtn.type = 'button';
+            screenshotBtn.id = 'btnTakeScreenshot';
+            screenshotBtn.className = 'modora-btn modora-btn-primary';
+            screenshotBtn.textContent = state.form.screenshotUrl ? 'Screenshot added' : '📷 Take screenshot';
+            if (state.form.screenshotUrl) screenshotBtn.disabled = true;
+            screenshotBtn.addEventListener('click', function() {
+                var btn = this;
+                btn.disabled = true;
+                btn.textContent = 'Taking screenshot...';
+                sendNuiCallback('requestScreenshotUpload', {}).then(function(data) {
+                    btn.disabled = false;
+                    btn.textContent = '📷 Take screenshot';
+                    if (data && data.success && data.url) {
+                        state.form.screenshotUrl = data.url;
+                        state.form.evidenceUrls.push(data.url);
+                        renderFormContent();
+                        renderEvidenceUrls();
+                    } else if (data && data.error) {
+                        showFormError(data.error);
+                    }
+                }).catch(function() {
+                    btn.disabled = false;
+                    btn.textContent = '📷 Take screenshot';
+                });
+            });
+            sectionSc.appendChild(screenshotBtn);
+            container.appendChild(sectionSc);
+        }
+
+        // Nearby players
+        var sectionNearby = document.createElement('div');
+        sectionNearby.id = 'nearbySection';
+        sectionNearby.className = 'modora-form-section';
+        var labelNearby = document.createElement('label');
+        labelNearby.className = 'modora-label';
+        labelNearby.textContent = 'Nearby players (optional)';
+        sectionNearby.appendChild(labelNearby);
+        var nearbyDiv = document.createElement('div');
+        nearbyDiv.id = 'nearbyPlayers';
+        nearbyDiv.className = 'modora-nearby';
+        sectionNearby.appendChild(nearbyDiv);
+        container.appendChild(sectionNearby);
+
+        renderEvidenceUrls();
+        renderNearbyPlayers();
+    }
+
+    function showFormError(msg) {
+        var formError = document.getElementById('formError');
+        if (formError) {
+            formError.textContent = msg;
+            formError.classList.remove('hidden');
         }
     }
 
@@ -161,7 +476,7 @@
             btn.textContent = 'Remove';
             btn.addEventListener('click', function() {
                 state.form.evidenceUrls.splice(i, 1);
-                renderEvidenceUrls();
+                renderFormContent();
             });
             item.appendChild(input);
             item.appendChild(btn);
@@ -175,20 +490,20 @@
     }
 
     function renderNearbyPlayers() {
-        var section = document.getElementById('nearbySection');
         var container = document.getElementById('nearbyPlayers');
-        if (!section || !container) return;
+        if (!container) return;
+        var section = document.getElementById('nearbySection');
         var players = (state.playerData && state.playerData.nearbyPlayers) || [];
         if (players.length === 0) {
-            section.classList.add('hidden');
+            if (section) section.classList.add('hidden');
             return;
         }
-        section.classList.remove('hidden');
+        if (section) section.classList.remove('hidden');
         container.innerHTML = '';
         state.form.targets = [];
         players.forEach(function(p) {
             var label = document.createElement('label');
-            label.className = 'modora-player-checkbox';
+            label.className = 'modora-player-option';
             var cb = document.createElement('input');
             cb.type = 'checkbox';
             cb.value = p.fivemId;
@@ -197,30 +512,25 @@
                 if (this.checked) {
                     state.form.targets.push({ fivemId: parseInt(this.value, 10), name: this.getAttribute('data-name') || '' });
                 } else {
-                    state.form.targets = state.form.targets.filter(function(t) { return t.fivemId !== parseInt(this.value, 10); }.bind(this));
+                    state.form.targets = state.form.targets.filter(function(t) { return t.fivemId !== parseInt(this.value, 10); });
                 }
             });
-            label.appendChild(cb);
             var span = document.createElement('span');
             span.textContent = (p.name || 'Player') + ' (ID: ' + p.fivemId + (p.distance != null ? ', ' + p.distance + 'm' : '') + ')';
+            label.appendChild(cb);
             label.appendChild(span);
             container.appendChild(label);
         });
     }
 
-    function updateCharCounts() {
-        var sub = document.getElementById('subject');
-        var desc = document.getElementById('description');
-        var subCount = document.getElementById('subjectCount');
-        var descCount = document.getElementById('descriptionCount');
-        if (sub && subCount) subCount.textContent = (sub.value || '').length;
-        if (desc && descCount) descCount.textContent = (desc.value || '').length;
-    }
-
     function validateForm() {
-        var category = (document.getElementById('category') && document.getElementById('category').value) || '';
-        var subject = (document.getElementById('subject') && document.getElementById('subject').value) || '';
-        var description = (document.getElementById('description') && document.getElementById('description').value) || '';
+        var categoryEl = document.getElementById('category');
+        var subjectEl = document.getElementById('subject');
+        var descriptionEl = document.getElementById('description');
+
+        var category = categoryEl ? categoryEl.value : '';
+        var subject = (subjectEl && subjectEl.value) ? subjectEl.value.trim() : '';
+        var description = (descriptionEl && descriptionEl.value) ? descriptionEl.value.trim() : '';
 
         var errors = {};
         if (!category) errors.category = 'Select a category';
@@ -229,6 +539,18 @@
         if (!description || description.length < 20) errors.description = 'Description must be at least 20 characters';
         else if (description.length > 2000) errors.description = 'Description must be 2000 characters or less';
 
+        var selectedCat = getSelectedCategoryData();
+        if (selectedCat && selectedCat.fields) {
+            selectedCat.fields.forEach(function(field) {
+                if (field.required) {
+                    var val = state.form.customFields[field.id];
+                    if (val === undefined || val === null || String(val).trim() === '') {
+                        errors['field_' + field.id] = (field.label || field.id) + ' is required';
+                    }
+                }
+            });
+        }
+
         ['category', 'subject', 'description'].forEach(function(field) {
             var errEl = document.getElementById(field + 'Error');
             if (errEl) {
@@ -236,9 +558,19 @@
                 errEl.classList.toggle('hidden', !errors[field]);
             }
         });
+        var container = document.getElementById('formContent');
+        if (container) {
+            var fieldErrors = container.querySelectorAll('[data-field-error]');
+            for (var i = 0; i < fieldErrors.length; i++) {
+                var fid = fieldErrors[i].getAttribute('data-field-error');
+                fieldErrors[i].textContent = errors['field_' + fid] || '';
+                fieldErrors[i].classList.toggle('hidden', !errors['field_' + fid]);
+            }
+        }
+
         var formError = document.getElementById('formError');
         if (formError) {
-            formError.textContent = Object.keys(errors).length ? (errors.category || errors.subject || errors.description) : '';
+            formError.textContent = Object.keys(errors).length ? (errors.category || errors.subject || errors.description || (selectedCat && selectedCat.fields && selectedCat.fields.find(function(f) { return errors['field_' + f.id]; }) && selectedCat.fields.map(function(f) { return errors['field_' + f.id]; }).filter(Boolean)[0]) || 'Please fix the errors above') : '';
             formError.classList.toggle('hidden', !formError.textContent);
         }
         return Object.keys(errors).length === 0;
@@ -252,10 +584,27 @@
         var subjectEl = document.getElementById('subject');
         var descriptionEl = document.getElementById('description');
 
+        var subject = subjectEl ? subjectEl.value.trim() : '';
+        var description = descriptionEl ? descriptionEl.value.trim() : '';
+        var selectedCat = getSelectedCategoryData();
+        if (selectedCat && selectedCat.fields) {
+            var subjectField = selectedCat.fields.find(function(f) { return (f.type || '').toLowerCase() === 'text' && (f.label || '').toLowerCase().indexOf('subject') !== -1; });
+            var descField = selectedCat.fields.find(function(f) { return (f.type || '').toLowerCase() === 'textarea' && (f.label || '').toLowerCase().indexOf('description') !== -1; });
+            if (subjectField && state.form.customFields[subjectField.id]) subject = String(state.form.customFields[subjectField.id]);
+            if (descField && state.form.customFields[descField.id]) description = String(state.form.customFields[descField.id]);
+        }
+        if (!subject) subject = 'Report';
+        if (!description) description = '';
+
+        var attachments = state.form.evidenceUrls.filter(Boolean).slice();
+        if (state.form.screenshotUrl && attachments.indexOf(state.form.screenshotUrl) === -1) {
+            attachments.push(state.form.screenshotUrl);
+        }
+
         var reportData = {
             category: categoryEl ? categoryEl.value : '',
-            subject: subjectEl ? subjectEl.value.trim() : '',
-            description: descriptionEl ? descriptionEl.value.trim() : '',
+            subject: subject,
+            description: description,
             priority: 'normal',
             reporter: {
                 fivemId: state.playerData.fivemId,
@@ -264,8 +613,8 @@
                 position: state.playerData.position || null
             },
             targets: state.form.targets,
-            attachments: [],
-            customFields: {},
+            attachments: attachments,
+            customFields: state.form.customFields || {},
             evidenceUrls: state.form.evidenceUrls.filter(Boolean)
         };
 
@@ -276,21 +625,13 @@
                 // Wait for reportSubmitted event from Lua for final result
             } else {
                 showView('form');
-                var formError = document.getElementById('formError');
-                if (formError) {
-                    formError.textContent = (data && data.error) || 'Submit failed';
-                    formError.classList.remove('hidden');
-                }
+                showFormError((data && data.error) || 'Submit failed');
                 var btn = document.getElementById('btnSubmit');
                 if (btn) btn.disabled = false;
             }
         }).catch(function(err) {
             showView('form');
-            var formError = document.getElementById('formError');
-            if (formError) {
-                formError.textContent = 'Failed to send report. Try again.';
-                formError.classList.remove('hidden');
-            }
+            showFormError('Failed to send report. Try again.');
             var btn = document.getElementById('btnSubmit');
             if (btn) btn.disabled = false;
         });
@@ -311,27 +652,14 @@
             state.lastSuccess = { ticketId: ticketId, ticketNumber: ticketNumber, ticketUrl: ticketUrl };
             var msg = document.getElementById('successMessage');
             if (msg) {
-                if (ticketNumber != null) {
-                    msg.textContent = 'Your report was submitted. Ticket #' + escapeText(String(ticketNumber));
-                } else {
-                    msg.textContent = 'Your report was submitted successfully.';
-                }
-            }
-            var link = document.getElementById('ticketLink');
-            if (link && ticketUrl) {
-                link.href = ticketUrl;
-                link.classList.remove('hidden');
-            } else if (link) {
-                link.classList.add('hidden');
+                msg.textContent = ticketNumber != null
+                    ? 'Your report was submitted. Ticket #' + escapeText(String(ticketNumber))
+                    : 'Your report was submitted successfully.';
             }
             showView('success');
         } else {
             showView('form');
-            var formError = document.getElementById('formError');
-            if (formError) {
-                formError.textContent = escapeText(error || 'Report could not be sent.');
-                formError.classList.remove('hidden');
-            }
+            showFormError(escapeText(error || 'Report could not be sent.'));
             if (cooldownSeconds != null && cooldownSeconds > 0) {
                 state.cooldownRemaining = cooldownSeconds;
                 var notice = document.getElementById('cooldownNotice');
@@ -345,7 +673,15 @@
 
     function openReport() {
         showView('loading');
-        state.form = { category: '', subject: '', description: '', evidenceUrls: [], targets: [] };
+        state.form = {
+            category: '',
+            subject: '',
+            description: '',
+            evidenceUrls: [],
+            targets: [],
+            customFields: {},
+            screenshotUrl: null
+        };
         state.lastSuccess = null;
 
         var serverNameEl = document.getElementById('serverName');
@@ -356,30 +692,31 @@
         }
 
         Promise.all([requestPlayerData(), requestServerConfig()]).then(function() {
-            renderCategories();
             renderIntroText();
-            renderEvidenceUrls();
-            renderNearbyPlayers();
-            var categoryEl = document.getElementById('category');
-            var subjectEl = document.getElementById('subject');
-            var descriptionEl = document.getElementById('description');
-            if (categoryEl) categoryEl.value = state.form.category || '';
-            if (subjectEl) subjectEl.value = state.form.subject || '';
-            if (descriptionEl) descriptionEl.value = state.form.description || '';
-            updateCharCounts();
+            renderFormContent();
             var formError = document.getElementById('formError');
             var cooldownNotice = document.getElementById('cooldownNotice');
             if (formError) { formError.classList.add('hidden'); formError.textContent = ''; }
             if (cooldownNotice) cooldownNotice.classList.add('hidden');
             showView('form');
         }).catch(function() {
-            var formError = document.getElementById('formError');
-            if (formError) {
-                formError.textContent = 'Could not load form. Try again.';
-                formError.classList.remove('hidden');
-            }
+            showFormError('Could not load form. Try again.');
+            renderFormContent();
             showView('form');
         });
+    }
+
+    function renderIntroText() {
+        var rfc = state.serverConfig && state.serverConfig.reportFormConfig;
+        var intro = (rfc && rfc.introText) ? String(rfc.introText).trim() : '';
+        var el = document.getElementById('reportIntroText');
+        if (!el) return;
+        if (intro) {
+            el.textContent = intro;
+            el.classList.remove('hidden');
+        } else {
+            el.classList.add('hidden');
+        }
     }
 
     function closeReport() {
@@ -401,35 +738,6 @@
         var btnCloseSuccess = document.getElementById('btnCloseSuccess');
         if (btnCloseSuccess) btnCloseSuccess.addEventListener('click', closeReport);
 
-        var btnAddEvidence = document.getElementById('btnAddEvidence');
-        if (btnAddEvidence) btnAddEvidence.addEventListener('click', addEvidenceUrl);
-
-        var btnTakeScreenshot = document.getElementById('btnTakeScreenshot');
-        if (btnTakeScreenshot) {
-            btnTakeScreenshot.addEventListener('click', function() {
-                var btn = this;
-                btn.disabled = true;
-                btn.textContent = 'Taking screenshot...';
-                sendNuiCallback('requestScreenshotUpload', {}).then(function(data) {
-                    btn.disabled = false;
-                    btn.textContent = '📷 Take screenshot';
-                    if (data && data.success && data.url) {
-                        state.form.evidenceUrls.push(data.url);
-                        renderEvidenceUrls();
-                    } else if (data && data.error) {
-                        var formError = document.getElementById('formError');
-                        if (formError) {
-                            formError.textContent = data.error;
-                            formError.classList.remove('hidden');
-                        }
-                    }
-                }).catch(function() {
-                    btn.disabled = false;
-                    btn.textContent = '📷 Take screenshot';
-                });
-            });
-        }
-
         var form = document.getElementById('reportForm');
         if (form) {
             form.addEventListener('submit', function(e) {
@@ -437,11 +745,6 @@
                 submitReport();
             });
         }
-
-        var subjectEl = document.getElementById('subject');
-        var descriptionEl = document.getElementById('description');
-        if (subjectEl) subjectEl.addEventListener('input', updateCharCounts);
-        if (descriptionEl) descriptionEl.addEventListener('input', updateCharCounts);
     }
 
     window.addEventListener('message', function(event) {
@@ -469,6 +772,8 @@
             handleReportSubmitted(data);
         } else if (data.action === 'screenshotReady' && data.url) {
             state.form.evidenceUrls.push(data.url);
+            state.form.screenshotUrl = data.url;
+            renderFormContent();
             renderEvidenceUrls();
         }
     });

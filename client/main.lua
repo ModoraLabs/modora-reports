@@ -3,19 +3,14 @@ local nearbyPlayers = {}
 local playerIdentifiersCache = {}
 local serverConfig = nil
 
--- ============================================
--- PLAYER IDENTIFIERS
--- ============================================
+-- Player identifiers are requested from server and cached for the report payload.
 
 RegisterNetEvent('modora:playerIdentifiers')
 AddEventHandler('modora:playerIdentifiers', function(serverIdentifiers)
     playerIdentifiersCache = serverIdentifiers or {}
 end)
 
--- ============================================
--- NEARBY PLAYERS
--- ============================================
-
+-- Nearby players within radius for the report form (optional targets).
 function GetNearbyPlayers(coords, radius, maxPlayers)
     local players = {}
     local playerPed = PlayerPedId()
@@ -49,10 +44,7 @@ function GetNearbyPlayers(coords, radius, maxPlayers)
     return players
 end
 
--- ============================================
--- NUI CALLBACKS
--- ============================================
-
+-- NUI callbacks: close, player data, server config, report submit, screenshot upload.
 RegisterNUICallback('closeReport', function(data, cb)
     SetNuiFocus(false, false)
     isMenuOpen = false
@@ -64,11 +56,8 @@ RegisterNUICallback('requestPlayerData', function(data, cb)
     local coords = GetEntityCoords(playerPed)
     local nearbyPlayers = GetNearbyPlayers(coords, Config.NearbyRadius or 30.0, Config.MaxNearbyPlayers or 5)
     
-    -- Request identifiers from server
     playerIdentifiersCache = {}
     TriggerServerEvent('modora:getPlayerIdentifiers')
-    
-    -- Wait for server response (max 500ms)
     local waitCount = 0
     while next(playerIdentifiersCache) == nil and waitCount < 10 do
         Wait(50)
@@ -130,7 +119,7 @@ RegisterNUICallback('submitReport', function(data, cb)
     cb({ success = true, processing = true })
 end)
 
--- Screenshot upload (screenshot-basic): NUI requests upload URL, server provides it, client uploads and sends URL back to NUI
+-- Screenshot: NUI requests upload URL from server; client uploads and sends URL back to NUI.
 local screenshotCb = nil
 
 RegisterNUICallback('requestScreenshotUpload', function(data, cb)
@@ -180,7 +169,7 @@ AddEventHandler('modora:reportSubmitted', function(payload)
             multiline = true,
             args = {'[Modora]', string.format(GetMessage('report_sent'), payload.ticketNumber or payload.ticketId or '')}
         })
-        -- Keep NUI open so user sees success screen; they close via Close button
+        -- NUI shows success; user closes manually.
     else
         TriggerEvent('chat:addMessage', {
             color = {255, 0, 0},
@@ -208,9 +197,7 @@ AddEventHandler('modora:serverConfig', function(config)
     })
 end)
 
--- ============================================
--- REPORT COMMAND
--- ============================================
+-- Report command and keybind open the NUI report form.
 
 RegisterCommand(Config.ReportCommand, function()
     if not Config.ModoraAPIBase or Config.ModoraAPIBase == '' then
@@ -231,7 +218,7 @@ RegisterCommand(Config.ReportCommand, function()
     isMenuOpen = true
     SetNuiFocus(true, true)
     
-    -- INIT payload: serverName from convar, optional for NUI branding
+    -- INIT: serverName (convar) and optional NUI branding
     local serverName = GetConvar('sv_projectName', '') or GetConvar('sv_hostname', '') or ''
     if serverName == '' then serverName = 'Server' end
     SendNUIMessage({
@@ -240,7 +227,7 @@ RegisterCommand(Config.ReportCommand, function()
         serverName = serverName,
         cooldownRemaining = 0,
         playerName = GetPlayerName(PlayerId()),
-        version = '1.0'
+        version = '1.0.6'
     })
     
     TriggerEvent('chat:addMessage', {
@@ -254,9 +241,7 @@ if Config.ReportKeybind and Config.ReportKeybind ~= false then
     RegisterKeyMapping(Config.ReportCommand, 'Open Report Menu', 'keyboard', Config.ReportKeybind)
 end
 
--- ============================================
--- ESC KEY HANDLING
--- ============================================
+-- ESC closes the report NUI when open.
 
 Citizen.CreateThread(function()
     while true do

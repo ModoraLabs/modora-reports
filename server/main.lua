@@ -52,42 +52,25 @@ end)
 -- API AUTHENTICATION
 -- ============================================
 
--- Returns effective base URL, host header and token (prod or alpha).
+-- Returns API base URL, optional host header and bearer token from config.
 local function getEffectiveAPIConfig()
-    local useAlpha = (Config.UseAlphaEnvironment == true) and
-        (Config.ModoraAPIBaseAlpha or '') ~= '' and
-        (Config.APITokenAlpha or '') ~= ''
-    if useAlpha then
-        local base = (Config.ModoraAPIBaseAlpha or ''):gsub('/+$', ''):match('^%s*(.-)%s*$')
-        local host = (Config.ModoraHostHeaderAlpha or ''):match('^%s*(.-)%s*$')
-        local token = (Config.APITokenAlpha or ''):match('^%s*(.-)%s*$')
-        return base, host, token, true
-    end
     local base = (Config.ModoraAPIBase or ''):gsub('/+$', ''):match('^%s*(.-)%s*$')
     local host = (Config.ModoraHostHeader or ''):match('^%s*(.-)%s*$')
     local token = (Config.APIToken or ''):match('^%s*(.-)%s*$')
-    return base, host, token, false
+    return base, host, token
 end
 
--- Build authentication headers (uses effective config: prod or alpha)
+-- Build request headers with bearer token.
 local function buildAuthHeaders()
     local _, hostHeader, token = getEffectiveAPIConfig()
     token = token or ''
-    local headers = {
+    return {
         ['Content-Type'] = 'application/json',
         ['Authorization'] = 'Bearer ' .. token,
     }
-    -- Don't manually set Host header 
-    -- if hostHeader and hostHeader ~= '' then
-    --     headers['Host'] = hostHeader
-    -- end
-    return headers
 end
 
--- ============================================
--- PLAYER IDENTIFIERS
--- ============================================
-
+-- Player identifiers (discord, steam, etc.) for the report payload.
 function GetPlayerIdentifiersTable(source)
     local identifiers = {}
     for i = 0, GetNumPlayerIdentifiers(source) - 1 do
@@ -109,11 +92,9 @@ AddEventHandler('modora:getPlayerIdentifiers', function()
     TriggerClientEvent('modora:playerIdentifiers', source, identifiers)
 end)
 
--- ============================================
--- API COMMUNICATION
--- ============================================
+-- API: config fetch and report submit with retries.
 
--- Retry mechanism for HTTP requests
+-- HTTP request with optional retries.
 local function performHttpRequestWithRetry(url, method, body, headers, callback, maxRetries)
     maxRetries = tonumber(maxRetries) or 3
     local retryCount = 0
@@ -128,7 +109,6 @@ local function performHttpRequestWithRetry(url, method, body, headers, callback,
         end
 
         PerformHttpRequest(url, function(statusCode, response, responseHeaders)
-            -- Convert statusCode to number for comparison
             local statusNum = tonumber(statusCode) or 0
 
             if Config.Debug then
@@ -139,7 +119,6 @@ local function performHttpRequestWithRetry(url, method, body, headers, callback,
             end
 
             if statusNum == 0 and retryCount < maxRetries then
-                -- Retry on connection failure
                 retryCount = retryCount + 1
                 if Config.Debug then
                     print('[Modora] Connection failed, waiting ' .. tostring(1000 * retryCount) .. 'ms before retry...')
@@ -147,8 +126,6 @@ local function performHttpRequestWithRetry(url, method, body, headers, callback,
                 Citizen.Wait(1000 * retryCount) -- Exponential backoff
                 attemptRequest()
             else
-                -- Success or max retries reached
-                -- Pass maxRetries and retryCount to callback for error messages
                 if callback then
                     callback(statusCode, response, responseHeaders, maxRetries, retryCount)
                 end
@@ -159,9 +136,9 @@ local function performHttpRequestWithRetry(url, method, body, headers, callback,
     attemptRequest()
 end
 
--- Get server configuration from API
+-- Fetches server config (categories, report form, etc.) from the API.
 local function getServerConfig(callback)
-    local baseUrl, _, token, isAlpha = getEffectiveAPIConfig()
+    local baseUrl, _, token = getEffectiveAPIConfig()
     if not baseUrl or baseUrl == '' then
         if callback then callback(false, 'API base URL not configured') end
         return
@@ -174,12 +151,6 @@ local function getServerConfig(callback)
         if callback then callback(false, 'API base URL must start with http:// or https://') end
         return
     end
-    if baseUrl:match('^http://') and Config.Debug then
-        print('[Modora] ⚠️ WARNING: Using HTTP (not HTTPS). This is less secure but avoids SSL/TLS certificate issues.')
-    end
-    if isAlpha and Config.Debug then
-        print('[Modora] Using ALPHA environment: ' .. baseUrl)
-    end
     local url = baseUrl .. '/config'
     local headers = buildAuthHeaders()
     if Config.Debug then
@@ -189,10 +160,7 @@ local function getServerConfig(callback)
     end
 
     performHttpRequestWithRetry(url, 'GET', '', headers, function(statusCode, response, responseHeaders, maxRetries, retryCount)
-        -- Convert statusCode to number for comparison
         local statusNum = tonumber(statusCode) or 0
-
-        -- Ensure maxRetries and retryCount have default values
         maxRetries = maxRetries or 3
         retryCount = retryCount or 0
 
@@ -202,13 +170,7 @@ local function getServerConfig(callback)
         end
 
         if statusNum == 0 then
-            -- HTTP 0 usually means connection failed (even after retries)
-            local errorMsg = 'Connection failed after retries. This is likely a FiveM HTTP client SSL/TLS issue.'
-            if Config.Debug then
-                print('[Modora] ERROR: ' .. errorMsg)
-                print('[Modora] URL: ' .. url)
-                print('[Modora] Try: Update FiveM server and CA certificates')
-            end
+            local errorMsg = 'Connection failed after retries.'
             if callback then callback(false, errorMsg) end
         elseif statusNum == 200 and response then
             local success, data = pcall(json.decode, response)
@@ -221,18 +183,13 @@ local function getServerConfig(callback)
             if callback then callback(false, 'Authentication failed. Check your API token.') end
         else
             local errorMsg = 'HTTP ' .. tostring(statusCode)
-            if response then
-                errorMsg = errorMsg .. ': ' .. response
-            end
-            if Config.Debug then
-                print('[Modora] Config request failed: ' .. errorMsg)
-            end
+            if response then errorMsg = errorMsg .. ': ' .. response end
             if callback then callback(false, errorMsg) end
         end
     end)
 end
 
--- Submit report to API
+-- Submits report payload to the API and returns result via callback.
 local function submitReport(reportData, callback)
     local baseUrl, _, token = getEffectiveAPIConfig()
     if not baseUrl or baseUrl == '' then
@@ -245,15 +202,9 @@ local function submitReport(reportData, callback)
     end
     baseUrl = baseUrl:gsub('/+$', ''):match('^%s*(.-)%s*$')
 
-    -- Validate URL format (allow both http:// and https://)
     if not baseUrl:match('^https?://') then
         if callback then callback(false, nil, 'API base URL must start with http:// or https://') end
         return
-    end
-
-    -- Warn if using HTTP (less secure)
-    if baseUrl:match('^http://') and Config.Debug then
-        print('[Modora] ⚠️ WARNING: Using HTTP (not HTTPS). This is less secure but avoids SSL/TLS certificate issues.')
     end
 
     local url = baseUrl .. '/reports'
@@ -268,10 +219,7 @@ local function submitReport(reportData, callback)
     end
 
     performHttpRequestWithRetry(url, 'POST', body, headers, function(statusCode, response, responseHeaders, maxRetries, retryCount)
-        -- Convert statusCode to number for comparison
         local statusNum = tonumber(statusCode) or 0
-
-        -- Ensure maxRetries and retryCount have default values
         maxRetries = maxRetries or 3
         retryCount = retryCount or 0
 
@@ -281,49 +229,7 @@ local function submitReport(reportData, callback)
         end
 
         if statusNum == 0 then
-            -- HTTP 0 usually means connection failed (even after retries)
-            local protocol = url:match('^(https?)://')
-            local errorMsg = 'Connection failed after ' .. tostring(retryCount) .. ' retry attempts (max: ' .. tostring(maxRetries) .. ').'
-
-            if Config.Debug then
-                print('[Modora] ERROR: ' .. errorMsg)
-                print('[Modora] URL: ' .. url)
-                print('[Modora] Protocol: ' .. (protocol or 'unknown'))
-                print('[Modora] Has token: ' .. tostring(Config.APIToken ~= '' and Config.APIToken ~= nil))
-                print('[Modora] Method: POST')
-                print('[Modora] Headers: ' .. json.encode(headers))
-
-                if protocol == 'http' then
-                    print('[Modora] Using HTTP - no SSL/TLS needed')
-                    print('[Modora]^7')
-                    print('[Modora] Possible causes:^7')
-                    print('[Modora]   1. Cloudflare redirecting HTTP to HTTPS (307 error)')
-                    print('[Modora]      → Configure Cloudflare: SSL/TLS mode = "Flexible" for api.modora.xyz')
-                    print('[Modora]   2. Server cannot reach api.modora.xyz (firewall/network)')
-                    print('[Modora]      → Test: curl -I --http1.1 ' .. url)
-                    print('[Modora]   3. DNS resolution failed')
-                    print('[Modora]      → Test: nslookup api.modora.xyz')
-                    print('[Modora]   4. Server timeout')
-                    print('[Modora]^7')
-                    print('[Modora] Quick fix: Try HTTPS instead:')
-                    print('[Modora]   Config.ModoraAPIBase = "https://api.modora.xyz"')
-                else
-                    print('[Modora] Using HTTPS - SSL/TLS certificate issue')
-                    print('[Modora]^7')
-                    print('[Modora] Solutions:^7')
-                    print('[Modora]   1. Update FiveM artifact to recommended version')
-                    print('[Modora]   2. Update CA certificates: sudo update-ca-certificates')
-                    print('[Modora]   3. Try HTTP instead: Config.ModoraAPIBase = "http://api.modora.xyz"')
-                    print('[Modora]      (Requires Cloudflare configuration to allow HTTP)')
-                end
-            end
-
-            if protocol == 'http' then
-                errorMsg = errorMsg .. ' Using HTTP. Check: 1) Server can reach api.modora.xyz, 2) Cloudflare allows HTTP, 3) DNS resolution works.'
-            else
-                errorMsg = errorMsg .. ' Using HTTPS. Try switching to HTTP in config.lua to avoid SSL/TLS issues.'
-            end
-
+            local errorMsg = 'Connection failed after ' .. tostring(retryCount) .. ' retry attempts.'
             if callback then callback(false, nil, errorMsg, nil) end
         elseif statusNum == 201 or statusNum == 200 then
             local success, data = pcall(json.decode, response)
@@ -344,16 +250,17 @@ local function submitReport(reportData, callback)
             end
         else
             local errorMsg = 'HTTP ' .. tostring(statusCode)
-            if response then
+            if response and response ~= '' then
                 local success, data = pcall(json.decode, response)
-                if success and data and data.message then
-                    errorMsg = data.message
+                if success and data then
+                    if data.message and data.message ~= '' then
+                        errorMsg = data.message
+                    elseif data.error and data.error ~= '' then
+                        errorMsg = data.error .. (data.message and (': ' .. data.message) or '')
+                    end
                 else
-                    errorMsg = errorMsg .. ': ' .. response
+                    errorMsg = errorMsg .. ': ' .. string.sub(response, 1, 200)
                 end
-            end
-            if Config.Debug then
-                print('[Modora] Report submission failed: ' .. errorMsg)
             end
             if callback then callback(false, nil, errorMsg, nil) end
         end
@@ -361,14 +268,13 @@ local function submitReport(reportData, callback)
 end
 
 -- ============================================
--- REPORT SUBMISSION HANDLER
+-- REPORT SUBMISSION
 -- ============================================
 
 RegisterNetEvent('modora:submitReport')
 AddEventHandler('modora:submitReport', function(reportData)
     local source = source
 
-    -- Validate required fields
     if not reportData.category or not reportData.subject or not reportData.description then
         TriggerClientEvent('modora:reportSubmitted', source, {
             success = false,
@@ -378,20 +284,17 @@ AddEventHandler('modora:submitReport', function(reportData)
         return
     end
 
-    -- Get player identifiers
     local identifiers = GetPlayerIdentifiersTable(source)
     reportData.reporter = reportData.reporter or {}
     reportData.reporter.identifiers = identifiers
     reportData.reporter.fivemId = source
     reportData.reporter.name = GetPlayerName(source)
 
-    -- Merge evidence URLs into meta for API
     reportData.meta = reportData.meta or {}
     if reportData.evidenceUrls and type(reportData.evidenceUrls) == 'table' then
         reportData.meta.evidence_urls = reportData.evidenceUrls
     end
 
-    -- Submit to API
     submitReport(reportData, function(success, data, err, cooldownSeconds)
         if success and data then
             TriggerClientEvent('modora:reportSubmitted', source, {
@@ -416,7 +319,7 @@ AddEventHandler('modora:submitReport', function(reportData)
 end)
 
 -- ============================================
--- SCREENSHOT UPLOAD TOKEN (for screenshot-basic)
+-- SCREENSHOT UPLOAD
 -- ============================================
 
 RegisterNetEvent('modora:getScreenshotUploadUrl')
@@ -446,7 +349,7 @@ AddEventHandler('modora:getScreenshotUploadUrl', function()
 end)
 
 -- ============================================
--- TEST API CONNECTION
+-- API CONNECTION CHECK
 -- ============================================
 
 local function testAPIConnection()
@@ -456,13 +359,7 @@ local function testAPIConnection()
     end
     baseUrl = baseUrl:gsub('/+$', ''):match('^%s*(.-)%s*$')
     if not baseUrl:match('^https?://') then
-        print('^1[Modora] ⚠️ Invalid API base URL format. Must start with http:// or https://^7')
         return
-    end
-
-    -- Warn if using HTTP
-    if baseUrl:match('^http://') then
-        print('^3[Modora] ⚠️ WARNING: Using HTTP (not HTTPS). This is less secure but avoids SSL/TLS certificate issues.^7')
     end
 
     local testUrl = baseUrl .. '/test'
@@ -489,33 +386,7 @@ local function testAPIConnection()
         local statusNum = tonumber(statusCode) or 0
 
         if statusNum == 0 then
-            print('^1[Modora] ⚠️ API CONNECTION FAILED!^7')
-            print('^1[Modora] Cannot connect to ' .. testUrl .. '^7')
-            print('^1[Modora] Protocol: ' .. (protocol or 'unknown') .. '^7')
-            print('^1[Modora]^7')
-
-            if protocol == 'http' then
-                print('^1[Modora] Using HTTP - no SSL/TLS needed^7')
-                print('^1[Modora]^7')
-                print('^1[Modora] Possible causes:^7')
-                print('^1[Modora]   1. Server cannot reach api.modora.xyz (firewall/network)^7')
-                print('^1[Modora]   2. DNS resolution failed^7')
-                print('^1[Modora]   3. Cloudflare blocking HTTP (check SSL/TLS settings)^7')
-                print('^1[Modora]   4. Server timeout^7')
-                print('^1[Modora]^7')
-                print('^1[Modora] Solutions:^7')
-                print('^1[Modora]   1. Test from server: curl ' .. testUrl .. '^7')
-                print('^1[Modora]   2. Check Cloudflare SSL/TLS settings for api.modora.xyz^7')
-                print('^1[Modora]   3. Verify DNS: nslookup api.modora.xyz^7')
-                print('^1[Modora]   4. Check firewall allows outbound HTTP (port 80)^7')
-            else
-                print('^1[Modora] Using HTTPS - SSL/TLS certificate issue^7')
-                print('^1[Modora]^7')
-                print('^1[Modora] Solutions:^7')
-                print('^1[Modora]   1. Switch to HTTP: Config.ModoraAPIBase = "http://api.modora.xyz"^7')
-                print('^1[Modora]   2. Update FiveM server to latest version^7')
-                print('^1[Modora]   3. Update CA certificates: sudo update-ca-certificates^7')
-            end
+            print('^1[Modora] API connection check: could not reach ' .. testUrl .. '^7')
         elseif statusNum == 200 then
             print('^2[Modora] ✅ API connection test successful!^7')
             if Config.Debug and response then
@@ -528,16 +399,13 @@ local function testAPIConnection()
                 end
             end
         else
-            print('^3[Modora] ⚠️ API connection test returned HTTP ' .. tostring(statusCode) .. '^7')
-            if response and Config.Debug then
-                print('[Modora] Response: ' .. string.sub(response, 1, 500))
-            end
+            print('^3[Modora] API connection check: HTTP ' .. tostring(statusCode) .. '^7')
         end
     end, 'GET', '', testHeaders)
 end
 
 -- ============================================
--- DEBUG: RAW HTTP CONNECTIVITY TEST
+-- HTTP CONNECTIVITY TEST (console command)
 -- ============================================
 
 local function testHttpEndpoint(url, label)
@@ -571,8 +439,8 @@ RegisterCommand('modora_debug_http', function(source)
     end
 
     testHttpEndpoint('http://example.com', 'example-http')
-    testHttpEndpoint('http://api.modora.xyz/test', 'modora-http-test')
-    testHttpEndpoint('https://api.modora.xyz/test', 'modora-https-test')
+    testHttpEndpoint('http://api.modoralabs.com/test', 'modora-http-test')
+    testHttpEndpoint('https://api.modoralabs.com/test', 'modora-https-test')
 
     local ip = '157.180.103.21'
     local function testIpEndpoint(url, label, hostHeader)
@@ -603,8 +471,8 @@ RegisterCommand('modora_debug_http', function(source)
         end, 'GET', '', headers)
     end
 
-    testIpEndpoint('http://' .. ip .. '/test', 'modora-ip-http-test', 'api.modora.xyz')
-    testIpEndpoint('https://' .. ip .. '/test', 'modora-ip-https-test', 'api.modora.xyz')
+    testIpEndpoint('http://' .. ip .. '/test', 'modora-ip-http-test', 'api.modoralabs.com')
+    testIpEndpoint('https://' .. ip .. '/test', 'modora-ip-https-test', 'api.modoralabs.com')
 end, false)
 
 -- ============================================
@@ -612,35 +480,15 @@ end, false)
 -- ============================================
 
 Citizen.CreateThread(function()
-    Citizen.Wait(2000) -- Wait 2 seconds after resource start
+    Citizen.Wait(2000)
 
     local baseUrl, _, token = getEffectiveAPIConfig()
-    local configValid = true
-    local errors = {}
-
-    if not baseUrl or baseUrl == '' then
-        configValid = false
-        table.insert(errors, Config.UseAlphaEnvironment and 'ModoraAPIBaseAlpha is not set' or 'ModoraAPIBase is not set')
-    end
-
-    if not token or token == '' then
-        configValid = false
-        table.insert(errors, Config.UseAlphaEnvironment and 'APITokenAlpha is required for alpha' or 'APIToken is required')
-    end
+    local configValid = (baseUrl and baseUrl ~= '' and token and token ~= '')
 
     if not configValid then
-        print('^1[Modora] ⚠️ CONFIGURATION ERROR!^7')
-        for _, error in ipairs(errors) do
-            print('^1[Modora]   - ' .. error .. '^7')
-        end
-        print('^1[Modora]^7')
-        print('^1[Modora] Please update config.lua with your API token from the dashboard:^7')
-        print('^1[Modora]   1. Go to Dashboard > Guild > FiveM Integration^7')
-        print('^1[Modora]   2. Add or select your server^7')
-        print('^1[Modora]   3. Copy the API Token^7')
-        print('^1[Modora]   4. Paste it in config.lua as Config.APIToken^7')
+        print('^1[Modora] Set Config.ModoraAPIBase and Config.APIToken in config.lua (from Dashboard → FiveM → your server).^7')
     else
-        print('^2[Modora] ✅ Configuration validated successfully^7')
+        print('^2[Modora] Configuration OK^7')
         Citizen.Wait(1000)
         testAPIConnection()
     end
