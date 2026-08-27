@@ -998,6 +998,7 @@
             subject: subject,
             description: description,
             priority: priorityMap[state.form.severity] || 'normal',
+            severity: state.form.severity,
             reporter: {
                 fivemId: state.playerData.fivemId,
                 name: state.playerData.name,
@@ -1129,14 +1130,23 @@
         // Live Discord channel only exists while the ticket is open; null once resolved/closed.
         var channelName = report.channel_name || report.channelName;
 
+        var ticketNumber = report.ticket_number != null ? report.ticket_number : report.ticketNumber;
+
         var isExpanded = state.expandedReportId === reportId;
         var card = el('div', { className: 'report-card' + (isExpanded ? ' expanded' : '') });
 
-        // Header row: channel (open tickets only) + badge
+        // Header row: report id + badge. The id is always shown; the Discord channel
+        // name is extra context and only exists while the ticket is still live.
         var header = el('div', { className: 'report-card-header' });
-        if (channelName) {
-            header.appendChild(el('span', { className: 'report-card-id', textContent: '#' + channelName }));
+        var identity = el('div', { className: 'report-card-identity' });
+        var idText = ticketNumber != null ? ('#' + ticketNumber) : (reportId != null ? ('#' + reportId) : '');
+        if (idText) {
+            identity.appendChild(el('span', { className: 'report-card-id', textContent: idText }));
         }
+        if (channelName) {
+            identity.appendChild(el('span', { className: 'report-card-channel', textContent: escapeText(channelName) }));
+        }
+        header.appendChild(identity);
 
         var statusText = (report.status || 'open').replace(/_/g, ' ');
         statusText = statusText.charAt(0).toUpperCase() + statusText.slice(1);
@@ -1157,7 +1167,9 @@
 
         // Expanded details
         var expanded = el('div', { className: 'report-card-expanded' });
+        if (reportId != null) expanded.appendChild(buildDetailRow('Report ID', reportId));
         if (categoryLabel) expanded.appendChild(buildDetailRow('Category', categoryLabel));
+        if (report.severity) expanded.appendChild(buildDetailRow('Severity', report.severity.charAt(0).toUpperCase() + report.severity.slice(1)));
         if (lastPublicUpdate) expanded.appendChild(buildDetailRow('Last update', lastPublicUpdate));
         if (report.outcome) expanded.appendChild(buildDetailRow('Outcome', report.outcome));
         if (evidenceCount != null) expanded.appendChild(buildDetailRow('Evidence', evidenceCount + ' item(s)'));

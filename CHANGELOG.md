@@ -2,6 +2,13 @@
 
 All notable changes to modora-admin are documented here.
 
+## [2.0.7] - 2026-08-27
+
+### Fixed
+
+- **Severity was always stored as "medium":** the report form mapped the picked severity onto a ticket priority and put the original in `meta.severity`, but the client dropped `meta` before handing the report to the server, so the API never saw a severity and fell back to guessing one from the category (which defaults to `medium`). The report payload now carries `severity` as its own field and forwards `meta` unchanged.
+- **`/reportstatus` "My Reports" showed no id:** since 2.0.6 the card header only rendered the Discord channel name, which the API returns as `null` once a ticket is resolved or closed, so those cards had no identifier at all. Cards now always show `#<ticket number>` (falling back to the report id), with the live channel name next to it while the ticket is open, and the expanded view lists the report id and severity.
+
 ## [2.0.6] - 2026-07-12
 
 ### Fixed

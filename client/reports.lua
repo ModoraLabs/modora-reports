@@ -72,11 +72,15 @@ RegisterNUICallback('submitReport', function(data, cb)
         subject = data.subject,
         description = data.description,
         priority = data.priority or 'normal',
+        -- The picked severity travels as its own field (and inside meta) so the API
+        -- stores it verbatim instead of guessing one from the category.
+        severity = data.severity,
         reporter = data.reporter or {},
         targets = data.targets or {},
         attachments = data.attachments or {},
         customFields = data.customFields or {},
-        evidenceUrls = data.evidenceUrls or {}
+        evidenceUrls = data.evidenceUrls or {},
+        meta = data.meta or {}
     }
 
     TriggerServerEvent('modora:submitReport', reportData)

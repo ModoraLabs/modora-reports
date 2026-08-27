@@ -761,10 +761,26 @@ body {
     margin-bottom: 6px;
 }
 
+.report-card-identity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
 .report-card-id {
     font-size: 12px;
     font-weight: 600;
     color: var(--text-muted);
+}
+
+.report-card-channel {
+    font-size: 11px;
+    color: var(--text-muted);
+    opacity: 0.75;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .report-card-subject {
