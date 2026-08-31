@@ -2,6 +2,14 @@
 
 All notable changes to modora-admin are documented here.
 
+## [2.0.8] - 2026-08-31
+
+### Fixed
+
+- **Spectate had no way out:** entering spectate made the staff member's ped invisible, frozen, and collisionless, and nothing anywhere reversed it — the on-screen "Use /mstaff to stop" hint did nothing, leaving staff stuck invisible and falling through the map when they teleported away. Spectate now tracks its own state and exits cleanly — restoring visibility, collision, and freeze and returning you to where you started — via Backspace, `/unspectate`, or `/mstaff`, with an `onResourceStop` safety net.
+- **Spectate didn't follow the target:** the camera used a one-time snapshot of the target's position, so the moment they walked away you were watching empty ground. Spectate now follows the target's live position (including into vehicles) using the target id the server already sends, and auto-stops if the spectated player disconnects.
+- **Spectate camera framing:** you were placed 10 m directly above the target and had to look straight down. Spectate now uses an adjustable scripted orbit camera positioned behind and above the target — mouse to rotate, scroll wheel to zoom.
+
 ## [2.0.7] - 2026-08-27
 
 ### Fixed

@@ -1,9 +1,9 @@
 fx_version 'cerulean'
 game 'gta5'
 
-author 'ModoraLabs'
+author 'ModoraLabs Developement Team'
 description 'Modora FiveM Control Center - Reports, moderation, player intelligence, health monitoring'
-version '2.0.7'
+version '2.0.8'
 
 dependency 'screenshot-basic'
 
