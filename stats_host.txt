@@ -1,2 +1,0 @@
-memory_mb=155
-cpu_percent=0
