@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Build tooling / cache
+.vite/
+dist/
+build/
+*.tsbuildinfo
+
+# Sensitive / local config (never commit txAdmin credentials)
+admins.json
+
+# Generated runtime output
+stats_host.txt
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
